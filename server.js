@@ -6,7 +6,7 @@ const port = process.env.PORT || 3000
 
 // If you have other middleware or API routes, mount them here
 // Serve import router
-const importRouter = require('./import/import')
+const importRouter = require('./import/import2')
 app.use('/api/import', importRouter)
 
 // Serve static files from the React app (optional)

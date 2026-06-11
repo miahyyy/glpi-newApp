@@ -3,14 +3,14 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const JSZip = require('jszip');
-const Papa = require('papaparse');
+const AdmZip = require('adm-zip');
+const csvParser = require('csv-parser');
 const FormData = require('form-data');
 const axios = require('axios');
 const { Jimp } = require('jimp');
 
 //const db = require('../db/database');
-const glpiService = require('../services/glpiService2');
+const glpiService = require('../services/glpiService');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -31,11 +31,19 @@ const cpUpload = upload.fields([
   { name: 'imageZip', maxCount: 1 }
 ]);
 
-const parseCSVFile = async (filePath) => {
-  const content = fs.readFileSync(filePath, 'utf8')
-  const parsed = Papa.parse(content, { header: true, skipEmptyLines: true })
-  return parsed.data || []
-}
+const parseCSVFile = (filePath) => {
+  return new Promise((resolve, reject) => {
+    const results = [];
+    fs.createReadStream(filePath)
+      .pipe(csvParser({
+        skipLinesWithError: true,
+        mapHeaders: ({ header }) => header.trim()
+      }))
+      .on('data', (data) => results.push(data))
+      .on('end', () => resolve(results))
+      .on('error', (err) => reject(err));
+  });
+};
 
 const getAllFiles = (dirPath, arrayOfFiles) => {
   const files = fs.readdirSync(dirPath);
@@ -69,38 +77,41 @@ router.post('/', cpUpload, async (req, res) => {
   try {
     const targetImagesDir = path.join(__dirname, '../public/images');
     if (!fs.existsSync(targetImagesDir)) fs.mkdirSync(targetImagesDir, { recursive: true });
-
+    
     try {
-      const zipContent = fs.readFileSync(zipPath)
-      const zip = await JSZip.loadAsync(zipContent)
-      const entries = Object.keys(zip.files)
-      for (const name of entries) {
-        const fileObj = zip.files[name]
-        if (fileObj.dir) continue
-        const data = await fileObj.async('nodebuffer')
-        const outName = path.basename(name)
-        const outPath = path.join(targetImagesDir, outName)
-        fs.writeFileSync(outPath, data)
-      }
+      const zip = new AdmZip(zipPath);
+      zip.extractAllTo(targetImagesDir, true);
     } catch (e) {
-      console.error('[Import] Erreur extraction ZIP:', e.message)
+      console.error("[Import] Erreur extraction ZIP:", e.message);
     }
 
-    const assetsData = await parseCSVFile(csv1Path);
+    const assetsData = await parseCSVFile(csv1Path);   
     const ticketsData = await parseCSVFile(csv2Path);
     const ticketsCostsData = await parseCSVFile(csv3Path);
 
     const sessionToken = await glpiService.initSession();
-    // SQLite integration disabled for now — data persistence handled server-side or removed.
-    // const sqliteConnection = db.getDb();
+    //const sqliteConnection = db.getDb();
 
     let allExtractedPaths = [];
     if (fs.existsSync(targetImagesDir)) {
       allExtractedPaths = getAllFiles(targetImagesDir);
     }
 
-    // SQLite statements commented out (persisting to local DB disabled)
-    // const stmtAsset = sqliteConnection.prepare(` ... `);
+    // const stmtAsset = sqliteConnection.prepare(`
+    //   INSERT INTO assets (glpi_id, itemtype, name, serial, otherserial, status, location, manufacturer, model, user_assigned, data_json)
+    //   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    //   ON CONFLICT(glpi_id) DO UPDATE SET 
+    //     itemtype=excluded.itemtype,
+    //     name=excluded.name, 
+    //     otherserial=excluded.otherserial,
+    //     status=excluded.status,
+    //     location=excluded.location,
+    //     manufacturer=excluded.manufacturer,
+    //     model=excluded.model,
+    //     user_assigned=excluded.user_assigned,
+    //     data_json=excluded.data_json,
+    //     synced_at=datetime('now')
+    // `);
 
     let fallbackIdCounter = 9000;
 
@@ -116,7 +127,7 @@ router.post('/', cpUpload, async (req, res) => {
         const manufacturerId = asset.Manufacturer ? await glpiService.getOrCreateManufacturer(asset.Manufacturer.trim()) : null;
         const locationId = asset.Location ? await glpiService.getOrCreateLocation(asset.Location.trim()) : null;
         const modelId = asset.Model ? await glpiService.getOrCreateModel(itemtype, asset.Model.trim()) : null;
-
+        
         // Déterminer le state ID selon le statut
         let stateId = 1; // Par défaut "En production"
         const statusLower = (asset.Status || '').trim().toLowerCase();
@@ -124,7 +135,7 @@ router.post('/', cpUpload, async (req, res) => {
         else if (statusLower === 'maintenance') stateId = 2;
         else if (statusLower === 'en stock') stateId = 3;
         else if (statusLower === 'en panne') stateId = 4;
-
+        
         // Préparer le payload pour GLPI avec les bons IDs
         const glpiPayload = {
           name: asset.Name,
@@ -132,7 +143,7 @@ router.post('/', cpUpload, async (req, res) => {
           comment: `Importé via NewApp`,
           states_id: stateId
         };
-
+        
         // Ajouter les champs relationnels avec les bons noms GLPI (suffix _id)
         if (manufacturerId) glpiPayload.manufacturers_id = manufacturerId;
         if (locationId) glpiPayload.locations_id = locationId;
@@ -143,7 +154,7 @@ router.post('/', cpUpload, async (req, res) => {
             glpiPayload[modelFieldName] = modelId;
           }
         }
-
+        
         // Ajouter l'utilisateur assigné si fourni
         // ⚠️ IMPORTANT: GLPI attend l'ID numérique, pas le nom d'utilisateur
         if (asset.User && asset.User.trim()) {
@@ -155,7 +166,7 @@ router.post('/', cpUpload, async (req, res) => {
             console.warn(`[GLPI] ⚠️ Utilisateur "${asset.User.trim()}" non trouvé - pas assigné`);
           }
         }
-
+        
         const result = await glpiService.createItem(itemtype, glpiPayload);
         if (result && result.id) {
           glpiId = result.id;
@@ -183,8 +194,8 @@ router.post('/', cpUpload, async (req, res) => {
       let matchedImagePath = allExtractedPaths.find(fullPath => {
         const fileNameOnly = path.basename(fullPath).toLowerCase();
         if (fileNameOnly.startsWith('.') || fileNameOnly.startsWith('._')) return false;
-        return fileNameOnly.startsWith(asset.Name.toLowerCase()) ||
-          (asset.Inventory_Number && fileNameOnly.includes(asset.Inventory_Number.toLowerCase()));
+        return fileNameOnly.startsWith(asset.Name.toLowerCase()) || 
+               (asset.Inventory_Number && fileNameOnly.includes(asset.Inventory_Number.toLowerCase()));
       }) || null;
 
       let finalImageName = matchedImagePath ? path.basename(matchedImagePath) : null;
@@ -196,14 +207,14 @@ router.post('/', cpUpload, async (req, res) => {
         try {
           const glpiUrlBase = process.env.GLPI_URL || "http://localhost/api.php/v1";
           const appToken = process.env.GLPI_APP_TOKEN || "uqZqwaXWY3GYWltQ7DidFLLQtWvHhjS92t99yMC4";
-
+          
           let fileBufferToSend;
           let sendName = originalName;
 
           // CONVERSION INTERNE : Si c'est un PNG, on force la conversion en JPEG
           if (fileExt === '.png') {
             console.log(`[Conversion] Outil Jimp : Transformation de ${originalName} en JPEG pour GLPI...`);
-
+            
             let image;
             const jimpInstance = require('jimp');
 
@@ -272,13 +283,42 @@ router.post('/', cpUpload, async (req, res) => {
         }
       }
 
-      // Persistence to local SQLite is disabled. Log the import result instead.
-      console.log(`[Import] ✅ Asset "${asset.Name}" imported into GLPI (Type: ${itemtype}, GLPI ID: ${glpiId}, Image: ${finalImageName})`);
+      // Sauvegarde SQLite avec tous les champs
+      stmtAsset.run(
+        glpiId,
+        itemtype,
+        asset.Name,
+        null, // serial
+        asset.Inventory_Number || '',
+        statusVal,
+        asset.Location || 'Non spécifié',
+        asset.Manufacturer || 'Inconnu',
+        asset.Model || 'N/A',
+        asset.User || 'Aucun',
+        JSON.stringify({
+          image: finalImageName
+        })
+      );
+      
+      console.log(`[Import] ✅ Asset "${asset.Name}" importé (Type: ${itemtype}, Localisation: ${asset.Location || 'N/A'}, Utilisateur: ${asset.User || 'N/A'})`);
     }
 
     // ─── ÉTAPE B : INJECTION DES TICKETS ─────────────────────────────────────
-    // SQLite ticket persistence disabled (stmtTicket commented out)
-    // const stmtTicket = sqliteConnection.prepare(`...`);
+    // const stmtTicket = sqliteConnection.prepare(`
+    //   INSERT INTO tickets (glpi_id, ref_ticket, name, content, type, status, priority, items, date_creation, duration_second, time_cost, fixed_cost)
+    //   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    //   ON CONFLICT(glpi_id) DO UPDATE SET 
+    //     name=excluded.name, 
+    //     content=excluded.content, 
+    //     type=excluded.type,
+    //     status=excluded.status,
+    //     priority=excluded.priority,
+    //     items=excluded.items,
+    //     duration_second=excluded.duration_second,
+    //     time_cost=excluded.time_cost,
+    //     fixed_cost=excluded.fixed_cost,
+    //     synced_at=datetime('now')
+    // `);
 
     // Créer un index pour les coûts par numéro de ticket (Feuille 3)
     const costsByTicketNum = {};
@@ -300,7 +340,7 @@ router.post('/', cpUpload, async (req, res) => {
     for (const ticket of ticketsData) {
       if (!ticket.Ref_Ticket) continue;
       let glpiTicketId = null;
-
+      
       try {
         const resultTicket = await glpiService.createItem("Ticket", {
           name: ticket.Titre || "Ticket sans titre",
@@ -324,13 +364,13 @@ router.post('/', cpUpload, async (req, res) => {
       if (statusLower === 'in progress' || statusLower === 'en cours') statusId = 2;
       else if (statusLower === 'closed' || statusLower === 'clos') statusId = 5;
       else if (statusLower === 'on hold' || statusLower === 'en attente') statusId = 3;
-
+      
       // Déterminer la priorité
       let priorityId = 3; // Par défaut "Medium"
       const priorityLower = (ticket.Priority || '').trim().toLowerCase();
       if (priorityLower === 'high' || priorityLower === 'haute') priorityId = 5;
       else if (priorityLower === 'low' || priorityLower === 'basse') priorityId = 2;
-
+      
       // Date de création
       const dateCreation = (ticket.Date && ticket.Heure) ? `${ticket.Date} ${ticket.Heure}` : new Date().toISOString();
 
@@ -347,11 +387,25 @@ router.post('/', cpUpload, async (req, res) => {
         }
       }
 
-      // Ticket persisted to GLPI; local persistence disabled.
-      console.log(`[Import] ✅ Ticket #${ticket.Ref_Ticket} processed (GLPI ID: ${glpiTicketId})`);
+      // stmtTicket.run(
+      //   glpiTicketId,
+      //   ticket.Ref_Ticket,
+      //   ticket.Titre,
+      //   ticket.Description,
+      //   ticket.Type || "Incident",
+      //   statusId,
+      //   priorityId,
+      //   JSON.stringify(itemsList),
+      //   dateCreation,
+      //   costData.duration_second,
+      //   costData.time_cost,
+      //   costData.fixed_cost
+      // );
+      
+      console.log(`[Import] ✅ Ticket #${ticket.Ref_Ticket} "${ticket.Titre}" importé (Durée: ${costData.duration_second}s, Coût: ${costData.time_cost}€)`);
     }
 
-    try { fs.unlinkSync(csv1Path); fs.unlinkSync(csv2Path); fs.unlinkSync(csv3Path); fs.unlinkSync(zipPath); } catch (e) { }
+    try { fs.unlinkSync(csv1Path); fs.unlinkSync(csv2Path); fs.unlinkSync(csv3Path); fs.unlinkSync(zipPath); } catch(e){}
 
     return res.json({ success: true, message: "Importation terminée avec adaptation d'image !" });
 
