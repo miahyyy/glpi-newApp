@@ -10,7 +10,7 @@ const axios = require('axios');
 const { Jimp } = require('jimp');
 
 //const db = require('../db/database');
-const glpiService = require('../services/glpiService');
+const glpiService = require('../services/glpiService2');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -284,21 +284,21 @@ router.post('/', cpUpload, async (req, res) => {
       }
 
       // Sauvegarde SQLite avec tous les champs
-      stmtAsset.run(
-        glpiId,
-        itemtype,
-        asset.Name,
-        null, // serial
-        asset.Inventory_Number || '',
-        statusVal,
-        asset.Location || 'Non spécifié',
-        asset.Manufacturer || 'Inconnu',
-        asset.Model || 'N/A',
-        asset.User || 'Aucun',
-        JSON.stringify({
-          image: finalImageName
-        })
-      );
+      // stmtAsset.run(
+      //   glpiId,
+      //   itemtype,
+      //   asset.Name,
+      //   null, // serial
+      //   asset.Inventory_Number || '',
+      //   statusVal,
+      //   asset.Location || 'Non spécifié',
+      //   asset.Manufacturer || 'Inconnu',
+      //   asset.Model || 'N/A',
+      //   asset.User || 'Aucun',
+      //   JSON.stringify({
+      //     image: finalImageName
+      //   })
+      // );
       
       console.log(`[Import] ✅ Asset "${asset.Name}" importé (Type: ${itemtype}, Localisation: ${asset.Location || 'N/A'}, Utilisateur: ${asset.User || 'N/A'})`);
     }

@@ -2,13 +2,13 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { fetchItems } from '../api/glpi'
 
 const ITEM_TYPES = [
-    { label: 'Ordinateurs',   type: 'Computer' },
-    { label: 'Téléphones',    type: 'Phone' },
-    { label: 'Moniteurs',     type: 'Monitor' },
-    { label: 'Imprimantes',   type: 'Printer' },
-    { label: 'Réseau',        type: 'NetworkEquipment' },
+    { label: 'Ordinateurs', type: 'Computer' },
+    { label: 'Téléphones', type: 'Phone' },
+    { label: 'Moniteurs', type: 'Monitor' },
+    { label: 'Imprimantes', type: 'Printer' },
+    { label: 'Réseau', type: 'NetworkEquipment' },
     { label: 'Périphériques', type: 'Peripheral' },
-    { label: 'Logiciels',     type: 'Software' },
+    { label: 'Logiciels', type: 'Software' },
 ]
 
 const STATE_LABELS = {
@@ -26,23 +26,23 @@ const STATE_COLORS = {
 }
 
 const TYPE_ICONS = {
-    Computer:        '🖥️',
-    Phone:           '📱',
-    Monitor:         '🖵',
-    Printer:         '🖨️',
-    NetworkEquipment:'🔌',
-    Peripheral:      '🖱️',
-    Software:        '💿',
+    Computer: '🖥️',
+    Phone: '📱',
+    Monitor: '🖵',
+    Printer: '🖨️',
+    NetworkEquipment: '🔌',
+    Peripheral: '🖱️',
+    Software: '💿',
 }
 
 export default function ItemsList() {
-    const [items, setItems]       = useState([])
-    const [loading, setLoading]   = useState(true)
-    const [error, setError]       = useState(null)
-    const [searchName, setSearchName]     = useState('')
-    const [filterType, setFilterType]     = useState('all')
+    const [items, setItems] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
+    const [searchName, setSearchName] = useState('')
+    const [filterType, setFilterType] = useState('all')
     const [filterStatus, setFilterStatus] = useState('all')
-    const [filterUser, setFilterUser]     = useState('')
+    const [filterUser, setFilterUser] = useState('')
 
     useEffect(() => {
         let mounted = true
@@ -75,9 +75,9 @@ export default function ItemsList() {
 
     const filtered = useMemo(() => {
         return items.filter(item => {
-            const name   = (item.name || '').toLowerCase()
+            const name = (item.name || '').toLowerCase()
             const serial = (item.otherserial || '').toLowerCase()
-            const query  = searchName.toLowerCase()
+            const query = searchName.toLowerCase()
 
             if (searchName && !name.includes(query) && !serial.includes(query)) return false
             if (filterType !== 'all' && item._type !== filterType) return false
@@ -207,13 +207,13 @@ export default function ItemsList() {
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map((item, idx) => {
-                        const id         = item.id || item.ID || idx
-                        const name       = item.name || `Élément #${id}`
-                        const stateId    = item.states_id
+                        const id = item.id || item.ID || idx
+                        const name = item.name || `Élément #${id}`
+                        const stateId = item.states_id
                         const stateLabel = STATE_LABELS[stateId] || 'Inconnu'
                         const stateColor = STATE_COLORS[stateId] || 'bg-gray-100 text-gray-600'
-                        const serial     = item.otherserial || '—'
-                        const icon       = TYPE_ICONS[item._type] || '📦'
+                        const serial = item.otherserial || '—'
+                        const icon = TYPE_ICONS[item._type] || '📦'
 
                         return (
                             <article

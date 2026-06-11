@@ -3,23 +3,30 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const GLPI_URL = process.env.GLPI_URL || "http://localhost/api.php/v1";
-const APP_TOKEN = process.env.GLPI_APP_TOKEN || "uqZqwaXWY3GYWltQ7DidFLLQtWvHhjS92t99yMC4";
-const USER_TOKEN = process.env.GLPI_USER_TOKEN || "4iczjvT5d0IZ99MC2rj9knxXxHe0Ms8ljy6u40FX";
+const APP_TOKEN = process.env.GLPI_APP_TOKEN || "MeUGLiq2J70rVn7t1hgN0hfyQ6D5nZmEQk1TEoTo";
+const USER_TOKEN = process.env.GLPI_USER_TOKEN || "s5mp8dCzjk1AcAlhBrK8AlWMJBxxhzJKP3KjMaNl";
 
 let sessionToken = null;
 
 // ─── Init Session ────────────────────────────────────────────────────────────
 async function initSession() {
-  const response = await axios.get(`${GLPI_URL}/initSession`, {
-    headers: {
-      "Content-Type": "application/json",
-      "App-Token": APP_TOKEN,
-      Authorization: `user_token ${USER_TOKEN}`,
-    },
-  });
-  sessionToken = response.data.session_token;
-  console.log("[GLPI] Session initialisée :", sessionToken);
-  return sessionToken;
+  try {
+    const response = await axios.get(`${GLPI_URL}/initSession`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `user_token ${USER_TOKEN}`,
+      },
+      // GLPI sometimes expects app_token as a query param named "app_token" (lowercase)
+      params: { app_token: APP_TOKEN }
+    });
+    sessionToken = response.data.session_token;
+    console.log("[GLPI] Session initialisée :", sessionToken);
+    return sessionToken;
+  } catch (err) {
+    const details = err.response && err.response.data ? err.response.data : err.message;
+    console.error('[GLPI] initSession failed:', details);
+    throw err;
+  }
 }
 
 // ─── Kill Session ────────────────────────────────────────────────────────────
@@ -107,7 +114,7 @@ async function searchItems(itemtype, criteria = []) {
 async function pushAssetToGLPI(assetData, sessionToken) {
   // Déterminer l'itemtype GLPI (par défaut Computer si non spécifié)
   const itemtype = assetData.itemtype || "Computer";
-  
+
   try {
     console.log(`[GLPI] Tentative d'envoi d'un actif vers ${GLPI_URL}/${itemtype}...`);
 
@@ -133,7 +140,7 @@ async function pushAssetToGLPI(assetData, sessionToken) {
       console.log(`[GLPI] Succès : ${itemtype} "${assetData.name}" créé avec l'ID GLPI #${response.data.id}`);
       return response.data.id; // On retourne l'ID GLPI généré
     }
-    
+
     return null;
   } catch (error) {
     const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
@@ -146,7 +153,7 @@ async function pushAssetToGLPI(assetData, sessionToken) {
 async function deleteTicketFromGLPI(ticketGlpiId, sessionToken) {
   try {
     await axios.delete(`${GLPI_URL}/Ticket/${ticketGlpiId}`, {
-      params: { 
+      params: {
         force_purge: true,
         app_token: APP_TOKEN // ◄── Corrigé : Utilise la variable locale en minuscules
       },
@@ -163,7 +170,7 @@ async function deleteTicketFromGLPI(ticketGlpiId, sessionToken) {
 async function purgeAllGLPITickets(sessionToken) {
   try {
     console.log("[GLPI] Récupération des tickets avant purge...");
-    
+
     // 1. Récupération des tickets — Passage de app_token en Query string (minuscules)
     const response = await axios.get(`${GLPI_URL}/Ticket`, {
       params: {
@@ -185,12 +192,13 @@ async function purgeAllGLPITickets(sessionToken) {
 
     if (validTickets.length === 0) {
       console.log("[GLPI] Aucun ticket trouvé sur le serveur à supprimer.");
-      return;
+      return { deleted: 0, total: 0 };
     }
 
     console.log(`[GLPI] Suppression de ${validTickets.length} tickets sur le serveur...`);
 
     // 2. Boucle de suppression définitive
+    let deleted = 0
     for (const ticket of validTickets) {
       try {
         await axios.delete(`${GLPI_URL}/Ticket/${ticket.id}`, {
@@ -207,13 +215,15 @@ async function purgeAllGLPITickets(sessionToken) {
             force_purge: true
           }
         });
+        deleted += 1
         console.log(`[GLPI] Ticket #${ticket.id} supprimé.`);
-      } catch (deleteError) {  
+      } catch (deleteError) {
         const delDetails = deleteError.response ? JSON.stringify(deleteError.response.data) : deleteError.message;
         console.error(`[GLPI] Impossible de supprimer le ticket #${ticket.id} :`, delDetails);
       }
     }
     console.log("[GLPI] Fin de la purge des tickets.");
+    return { deleted, total: validTickets.length };
   } catch (error) {
     const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
     console.error("[GLPI] Erreur lors de la purge globale :", errorDetails);
@@ -231,7 +241,7 @@ async function fetchAllGLPIAssets(sessionToken) {
   for (const itemtype of itemtypes) {
     try {
       console.log(`[GLPI] Récupération des éléments de type : ${itemtype}...`);
-      
+
       const response = await axios.get(`${GLPI_URL}/${itemtype}`, {
         params: {
           app_token: APP_TOKEN,
@@ -278,27 +288,27 @@ async function fetchAllGLPIAssets(sessionToken) {
 // Recherche ou crée un Manufacturer par son nom
 async function getOrCreateManufacturer(name) {
   if (!name || name.length === 0) return null;
-  
+
   try {
     if (!sessionToken) await initSession();
-    
+
     // Recherche du fabricant existant
     const response = await axios.get(`${GLPI_URL}/Manufacturer`, {
       headers: buildHeaders(),
-      params: { 
+      params: {
         searchText: { name: name },
         range: "0-100"
       }
     });
-    
+
     let items = Array.isArray(response.data) ? response.data : [];
     let existing = items.find(m => m.name === name);
-    
+
     if (existing && existing.id) {
       console.log(`[GLPI] Fabricant existant trouvé: "${name}" (ID: ${existing.id})`);
       return existing.id;
     }
-    
+
     // Créer si n'existe pas
     const createResp = await createItem("Manufacturer", { name: name });
     if (createResp && createResp.id) {
@@ -314,27 +324,27 @@ async function getOrCreateManufacturer(name) {
 // Recherche ou crée une Location par son nom
 async function getOrCreateLocation(name) {
   if (!name || name.length === 0) return null;
-  
+
   try {
     if (!sessionToken) await initSession();
-    
+
     // Recherche de la localisation existante
     const response = await axios.get(`${GLPI_URL}/Location`, {
       headers: buildHeaders(),
-      params: { 
+      params: {
         searchText: { name: name },
         range: "0-100"
       }
     });
-    
+
     let items = Array.isArray(response.data) ? response.data : [];
     let existing = items.find(l => l.name === name);
-    
+
     if (existing && existing.id) {
       console.log(`[GLPI] Localisation existante trouvée: "${name}" (ID: ${existing.id})`);
       return existing.id;
     }
-    
+
     // Créer si n'existe pas
     const createResp = await createItem("Location", { name: name });
     if (createResp && createResp.id) {
@@ -350,28 +360,28 @@ async function getOrCreateLocation(name) {
 // Recherche ou crée un Model par son nom et type
 async function getOrCreateModel(itemtype, modelName) {
   if (!modelName || modelName.length === 0) return null;
-  
+
   try {
     if (!sessionToken) await initSession();
-    
+
     // Déterminer le bon type de modèle selon le type d'équipement
     const modelType = getModelTypeForItemType(itemtype);
     if (!modelType) return null;
-    
+
     // Recherche du modèle existant avec une simple requête GET
     const response = await axios.get(`${GLPI_URL}/${modelType}`, {
       headers: buildHeaders(),
       params: { range: "0-300" }
     });
-    
+
     let items = Array.isArray(response.data) ? response.data : [];
     let existing = items.find(m => m.name && m.name === modelName);
-    
+
     if (existing && existing.id) {
       console.log(`[GLPI] Modèle existant trouvé: "${modelName}" (ID: ${existing.id})`);
       return existing.id;
     }
-    
+
     // Créer si n'existe pas
     const createResp = await createItem(modelType, { name: modelName });
     if (createResp && createResp.id) {
@@ -413,10 +423,10 @@ function getModelFieldNameForItemType(itemtype) {
 // Recherche un utilisateur par son nom/login
 // async function getOrCreateUser(username) {
 //   if (!username || username.length === 0) return null;
-  
+
 //   try {
 //     if (!sessionToken) await initSession();
-    
+
 //     // Recherche de l'utilisateur existant
 //     const response = await axios.get(`${GLPI_URL}/User`, {
 //       headers: buildHeaders(),
@@ -424,18 +434,18 @@ function getModelFieldNameForItemType(itemtype) {
 //         range: "0-300"
 //       }
 //     });
-    
+
 //     let items = Array.isArray(response.data) ? response.data : [];
 //     // Chercher par login ou realname
 //     let existing = items.find(u => 
 //       u.name === username || u.login === username || u.realname === username
 //     );
-    
+
 //     if (existing && existing.id) {
 //       console.log(`[GLPI] Utilisateur trouvé: "${username}" (ID: ${existing.id})`);
 //       return existing.id;
 //     }
-    
+
 //     console.warn(`[GLPI] ⚠️ Utilisateur "${username}" non trouvé dans GLPI. Il doit être créé manuellement.`);
 //     return null;
 //   } catch (err) {
@@ -446,29 +456,29 @@ function getModelFieldNameForItemType(itemtype) {
 
 async function getOrCreateUser(username) {
   if (!username || username.length === 0) return null;
-  
+
   try {
     if (!sessionToken) await initSession();
-    
+
     // 1. Recherche de l'utilisateur existant
     const response = await axios.get(`${GLPI_URL}/User`, {
       headers: buildHeaders(),
       params: { range: "0-300" }
     });
-    
+
     let items = Array.isArray(response.data) ? response.data : [];
-    let existing = items.find(u => 
+    let existing = items.find(u =>
       u.name === username || u.login === username || u.realname === username
     );
-    
+
     if (existing && existing.id) {
       console.log(`[GLPI] Utilisateur trouvé: "${username}" (ID: ${existing.id})`);
       return existing.id;
     }
-    
+
     // 2. Si non trouvé, on le crée
     console.log(`[GLPI] Utilisateur "${username}" non trouvé. Tentative de création...`);
-    
+
     // On utilise ta fonction générique createItem
     const newUser = await createItem("User", {
       name: username, // 'name' est le login dans GLPI

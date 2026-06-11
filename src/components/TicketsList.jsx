@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { fetchTickets } from '../api/glpi'
 
 const STATUS_MAP = {
-    1: { label: 'Nouveau',    color: 'bg-blue-100 text-blue-800' },
-    2: { label: 'En cours',   color: 'bg-yellow-100 text-yellow-800' },
+    1: { label: 'Nouveau', color: 'bg-blue-100 text-blue-800' },
+    2: { label: 'En cours', color: 'bg-yellow-100 text-yellow-800' },
     3: { label: 'En attente', color: 'bg-orange-100 text-orange-800' },
-    4: { label: 'Résolu',     color: 'bg-green-100 text-green-800' },
-    5: { label: 'Clos',       color: 'bg-gray-100 text-gray-500' },
+    4: { label: 'Résolu', color: 'bg-green-100 text-green-800' },
+    5: { label: 'Clos', color: 'bg-gray-100 text-gray-500' },
 }
 
 const PRIORITY_DOTS = {
@@ -24,7 +24,7 @@ const PRIORITY_DOTS = {
 export default function TicketsList({ onSelect }) {
     const [tickets, setTickets] = useState([])
     const [loading, setLoading] = useState(true)
-    const [error, setError]     = useState(null)
+    const [error, setError] = useState(null)
 
     useEffect(() => {
         let mounted = true
@@ -68,21 +68,20 @@ export default function TicketsList({ onSelect }) {
     return (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {tickets.map(t => {
-                const id       = t.id || t.ID
-                const title    = t.name || t.title || `Ticket #${id || '–'}`
-                const status   = STATUS_MAP[t.status] || { label: String(t.status || t.fk_state || '—'), color: 'bg-gray-100 text-gray-600' }
+                const id = t.id || t.ID
+                const title = t.name || t.title || `Ticket #${id || '–'}`
+                const status = STATUS_MAP[t.status] || { label: String(t.status || t.fk_state || '—'), color: 'bg-gray-100 text-gray-600' }
                 const dotColor = PRIORITY_DOTS[t.priority] || 'bg-gray-300'
-                const content  = t.content || t.description || t.problem || ''
+                const content = t.content || t.description || t.problem || ''
 
                 return (
                     <article
                         key={id ?? title}
                         onClick={clickable ? () => onSelect(t) : undefined}
-                        className={`bg-white p-4 rounded-lg shadow-sm border transition-shadow ${
-                            clickable
+                        className={`bg-white p-4 rounded-lg shadow-sm border transition-shadow ${clickable
                                 ? 'cursor-pointer hover:shadow-md hover:border-warm-300'
                                 : ''
-                        }`}
+                            }`}
                     >
                         <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">

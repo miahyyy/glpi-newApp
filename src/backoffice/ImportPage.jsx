@@ -1,57 +1,42 @@
 import React, { useState } from 'react'
-import Papa from 'papaparse'
-import JSZip from 'jszip'
 import { createItem, createTicket, uploadDocument } from '../api/glpi'
 
 export default function ImportPage() {
     const [csvFiles, setCsvFiles] = useState([])
     const [zipFile, setZipFile] = useState(null)
-    const [parsed, setParsed] = useState({})
+    const [parsedCounts, setParsedCounts] = useState({})
     const [imagesMap, setImagesMap] = useState({})
     const [message, setMessage] = useState(null)
 
     async function handleCsvChange(e) {
         const files = Array.from(e.target.files)
         setCsvFiles(files)
-        const results = {}
-
+        const counts = {}
         for (const f of files) {
-            const text = await f.text()
-            const parsedCsv = Papa.parse(text, { header: true, skipEmptyLines: true })
-            results[f.name] = parsedCsv.data
+            try {
+                const text = await f.text()
+                const lines = text.split(/\r?\n/).filter(Boolean)
+                counts[f.name] = lines.length
+            } catch (e) {
+                counts[f.name] = 0
+            }
         }
-
-        setParsed(results)
+        setParsedCounts(counts)
     }
 
     async function handleZipChange(e) {
         const f = e.target.files[0]
         setZipFile(f)
         if (!f) return
-        const content = await f.arrayBuffer()
-        const zip = await JSZip.loadAsync(content)
-        const map = {}
-        const files = Object.keys(zip.files)
-        for (const name of files) {
-            if (zip.files[name].dir) continue
-            const fileData = await zip.files[name].async('base64')
-            // store as data URL (attempt to detect type)
-            map[name] = `data:application/octet-stream;base64,${fileData}`
-        }
-        setImagesMap(map)
+        // We don't extract ZIP client-side anymore; server will handle it with adm-zip.
+        setImagesMap({})
     }
 
     function buildPreviewCounts() {
         const counts = { items: 0, tickets: 0, byType: {} }
-        Object.values(parsed).forEach((rows) => {
-            rows.forEach((r) => {
-                if (r.Item_Type) {
-                    counts.items += 1
-                    counts.byType[r.Item_Type] = (counts.byType[r.Item_Type] || 0) + 1
-                } else if (r.Ticket || r.Ticket_ID || r.Subject) {
-                    counts.tickets += 1
-                }
-            })
+        Object.entries(parsedCounts).forEach(([name, n]) => {
+            // We can't infer types client-side; just increment items by total rows
+            counts.items += n || 0
         })
         return counts
     }
@@ -71,7 +56,7 @@ export default function ImportPage() {
         setMessage(null)
 
         // prefer server-side import endpoint if configured
-        const endpoint = import.meta.env.VITE_IMPORT_ENDPOINT || '/api/import'
+        const endpoint = import.meta.env.VITE_BACKEND_URL
         try {
             const form = new FormData()
             // attach csv files: prefer file inputs if present, else recreate from parsed
@@ -89,7 +74,7 @@ export default function ImportPage() {
 
             setMessage('Envoi des fichiers au serveur d\'import...')
 
-            const res = await fetch(endpoint, { method: 'POST', body: form })
+            const res = await fetch(`${endpoint}/api/import`, { method: 'POST', body: form })
             const json = await res.json()
             if (!res.ok) {
                 setMessage(`Import failed: ${json?.message || res.statusText}`)
@@ -122,8 +107,8 @@ export default function ImportPage() {
                 <div className="bg-white p-4 rounded shadow-sm border">
                     <h3 className="font-semibold text-warm-800">Preview</h3>
                     <div className="mt-2 text-sm text-gray-700">
-                        <div>CSV files loaded: {Object.keys(parsed).length}</div>
-                        <div>Images in ZIP: {Object.keys(imagesMap).length}</div>
+                        <div>CSV files loaded: {csvFiles.length}</div>
+                        <div>Images ZIP selected: {zipFile ? zipFile.name : '—'}</div>
                         <div className="mt-2">
                             {Object.entries(buildPreviewCounts()).map(([k, v]) => (
                                 <div key={k} className="text-sm text-gray-700">{k}: {JSON.stringify(v)}</div>
@@ -142,23 +127,10 @@ export default function ImportPage() {
                 <div className="bg-white p-4 rounded shadow-sm border">
                     <h3 className="font-semibold text-warm-800">Sample rows (first 5 per file)</h3>
                     <div className="mt-2 space-y-4">
-                        {Object.entries(parsed).map(([name, rows]) => (
+                        {Object.entries(parsedCounts).length === 0 && <div className="text-sm text-gray-600">Aperçu détaillé non disponible en local — le serveur utilise `csv-parser` et `adm-zip`.</div>}
+                        {Object.entries(parsedCounts).map(([name, count]) => (
                             <div key={name}>
-                                <div className="font-medium">{name} — {rows.length} rows</div>
-                                <table className="w-full text-sm mt-2 border">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            {rows[0] && Object.keys(rows[0]).slice(0, 8).map((h) => (<th key={h} className="p-1 border">{h}</th>))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {rows.slice(0, 5).map((r, i) => (
-                                            <tr key={i} className="odd:bg-white even:bg-gray-50">
-                                                {Object.values(r).slice(0, 8).map((v, j) => (<td key={j} className="p-1 border">{v}</td>))}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <div className="font-medium">{name} — {count} rows (preview limited)</div>
                             </div>
                         ))}
                     </div>

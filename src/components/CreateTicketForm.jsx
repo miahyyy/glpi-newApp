@@ -2,31 +2,31 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { createTicket, fetchItems } from '../api/glpi'
 
 const ITEM_TYPES = [
-    { label: 'Ordinateurs',   type: 'Computer' },
-    { label: 'Téléphones',    type: 'Phone' },
-    { label: 'Moniteurs',     type: 'Monitor' },
-    { label: 'Imprimantes',   type: 'Printer' },
-    { label: 'Réseau',        type: 'NetworkEquipment' },
+    { label: 'Ordinateurs', type: 'Computer' },
+    { label: 'Téléphones', type: 'Phone' },
+    { label: 'Moniteurs', type: 'Monitor' },
+    { label: 'Imprimantes', type: 'Printer' },
+    { label: 'Réseau', type: 'NetworkEquipment' },
     { label: 'Périphériques', type: 'Peripheral' },
-    { label: 'Logiciels',     type: 'Software' },
+    { label: 'Logiciels', type: 'Software' },
 ]
 
 const INITIAL_FORM = {
-    name:     '',
-    content:  '',
-    type:     '1',   // 1 = Incident, 2 = Demande
+    name: '',
+    content: '',
+    type: '1',   // 1 = Incident, 2 = Demande
     priority: '3',   // 3 = Normale
-    status:   '1',   // 1 = Nouveau
+    status: '1',   // 1 = Nouveau
 }
 
 export default function CreateTicketForm({ onSuccess }) {
-    const [allItems, setAllItems]         = useState([])
+    const [allItems, setAllItems] = useState([])
     const [loadingItems, setLoadingItems] = useState(true)
-    const [form, setForm]                 = useState(INITIAL_FORM)
+    const [form, setForm] = useState(INITIAL_FORM)
     const [selectedItems, setSelectedItems] = useState([])
-    const [itemSearch, setItemSearch]     = useState('')
-    const [submitting, setSubmitting]     = useState(false)
-    const [message, setMessage]           = useState(null)   // { type: 'success'|'error', text }
+    const [itemSearch, setItemSearch] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const [message, setMessage] = useState(null)   // { type: 'success'|'error', text }
 
     /* Chargement de tous les éléments du parc */
     useEffect(() => {
@@ -90,13 +90,13 @@ export default function CreateTicketForm({ onSuccess }) {
         setMessage(null)
         try {
             const payload = {
-                name:     form.name.trim(),
-                content:  form.content.trim(),
-                type:     parseInt(form.type),
+                name: form.name.trim(),
+                content: form.content.trim(),
+                type: parseInt(form.type),
                 priority: parseInt(form.priority),
-                status:   parseInt(form.status),
-                urgency:  parseInt(form.priority),
-                impact:   2,
+                status: parseInt(form.status),
+                urgency: parseInt(form.priority),
+                impact: 2,
             }
             await createTicket(payload)
             /* Note : l'association d'items à un ticket nécessite une API GLPI
@@ -241,14 +241,13 @@ export default function CreateTicketForm({ onSuccess }) {
                     ) : (
                         <div className="max-h-52 overflow-y-auto border rounded-lg divide-y">
                             {filteredItems.map((item, idx) => {
-                                const id       = item.id || item.ID || idx
+                                const id = item.id || item.ID || idx
                                 const selected = isSelected(item)
                                 return (
                                     <label
                                         key={`${item._type}-${id}`}
-                                        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
-                                            selected ? 'bg-warm-50' : 'hover:bg-gray-50'
-                                        }`}
+                                        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? 'bg-warm-50' : 'hover:bg-gray-50'
+                                            }`}
                                     >
                                         <input
                                             type="checkbox"
@@ -277,9 +276,8 @@ export default function CreateTicketForm({ onSuccess }) {
                 {/* Message de retour + bouton */}
                 <div className="flex items-center gap-4">
                     {message && (
-                        <p className={`text-sm flex-1 ${
-                            message.type === 'error' ? 'text-red-600' : 'text-green-600'
-                        }`}>
+                        <p className={`text-sm flex-1 ${message.type === 'error' ? 'text-red-600' : 'text-green-600'
+                            }`}>
                             {message.type === 'success' ? '✓ ' : '⚠ '}
                             {message.text}
                         </p>

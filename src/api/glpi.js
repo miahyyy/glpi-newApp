@@ -1,4 +1,5 @@
 const BASE = import.meta.env.VITE_GLPI_API_BASE || 'http://localhost/glpi/apirest.php'
+const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
 const APP_TOKEN = import.meta.env.VITE_GLPI_APP_TOKEN || ''
 const SESSION_TOKEN = import.meta.env.VITE_GLPI_SESSION_TOKEN || ''
 
@@ -48,26 +49,16 @@ export async function deleteTicket(id) {
 // }
 
 export async function resetTickets(onProgress) {
-    // Fetch tickets first
-    const data = await fetchTickets()
-    const list = Array.isArray(data) ? data : data.data || []
-    const total = list.length
-    let done = 0
-
-    for (const t of list) {
-        const id = t.id || t.ID
-        if (!id) continue
-        try {
-            await deleteTicket(id)
-        } catch (e) {
-            // continue on error but report via progress callback
-            console.error('Failed to delete', id, e)
-        }
-        done += 1
-        if (typeof onProgress === 'function') onProgress(done, total, id)
+    // Use backend endpoint which triggers purgeAllGLPITickets on the server
+    const url = `${BACKEND}/api/glpi/purge-tickets`
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Purge API error ${res.status}: ${text}`)
     }
-
-    return { deleted: done, total }
+    const json = await res.json()
+    if (typeof onProgress === 'function') onProgress(json.deleted || 0, json.total || 0, null)
+    return { deleted: json.deleted || 0, total: json.total || 0 }
 }
 
 export async function deleteItem(type, id) {
