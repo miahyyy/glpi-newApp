@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react'
 import TicketsList from '../components/TicketsList'
 import { fetchItems, fetchTickets } from '../api/glpi'
+import KanbanSettingsPanel from './KanbanSettingsPanel'
 
 const ITEM_TYPES = [
     { label: 'Périphériques', type: 'Peripheral' },
@@ -111,6 +112,12 @@ export default function BackOffice() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {!loading && !error && (
+                <div className="mt-6">
+                    <KanbanSettingsPanel />
                 </div>
             )}
 

@@ -207,7 +207,8 @@ async function purgeAllGLPITickets(sessionToken) {
     // 1. Récupération des tickets — Passage de app_token en Query string (minuscules)
     const response = await axios.get(`${GLPI_URL}/Ticket`, {
       params: {
-        app_token: APP_TOKEN // ◄── Corrigé : Variable locale en minuscules
+        app_token: APP_TOKEN, // ◄── Corrigé : Variable locale en minuscules
+        range: "0-999999"
       },
       headers: {
         'Session-Token': sessionToken

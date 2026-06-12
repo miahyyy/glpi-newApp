@@ -1,0 +1,3 @@
+Déplacement Kanban vers Terminé -> afficher boite de dialogue pour fixer nouveau coût (stocker dans SQLITE)
+
+nouvelle Page : Coût (liste Asset, coût + nouveau coût (à noter super_cost), coup total ticket)

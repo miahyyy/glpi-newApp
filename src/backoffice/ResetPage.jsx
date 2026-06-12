@@ -10,7 +10,8 @@ const ALL_CATEGORIES = [
     { label: 'Moniteurs', type: 'Monitor' },
     { label: 'Imprimantes', type: 'Printer' },
     { label: 'Réseau', type: 'NetworkEquipment' },
-    { label: 'Logiciels', type: 'Software' }
+    { label: 'Logiciels', type: 'Software' },
+    {label: 'Utilisateurs', type: 'User'}
 ]
 
 export default function ResetPage() {

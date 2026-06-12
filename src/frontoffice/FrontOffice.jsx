@@ -20,10 +20,12 @@ import ItemsList         from '../components/ItemsList'
 import TicketsList       from '../components/TicketsList'
 import CreateTicketForm  from '../components/CreateTicketForm'
 import TicketDetailModal from '../components/TicketDetailModal'
+import KanbanBoard from '../components/KanbanBoard'
 
 const TABS = [
     { id: 'items',   label: 'Éléments du parc', icon: '🖥️' },
     { id: 'tickets', label: 'Tickets',           icon: '🎫' },
+    { id: 'kanban',  label: 'Kanban',            icon: '📋' },
     { id: 'create',  label: 'Créer un ticket',   icon: '+' },
 ]
 
@@ -80,6 +82,10 @@ export default function FrontOffice() {
 
             {activeTab === 'create' && (
                 <CreateTicketForm onSuccess={handleTicketCreated} />
+            )}
+
+            {activeTab === 'kanban' && (
+                <KanbanBoard />
             )}
 
             {/* Modal détail ticket */}

@@ -55,3 +55,54 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Import server listening on http://localhost:${port}`)
 })
+
+
+
+// ── Kanban SQLite settings ──────────────────────────────────────────────────
+const kanbanDb = require('./db/kanban')
+
+app.get('/api/kanban/settings', (req, res) => {
+    res.json(kanbanDb.getAllSettings())
+})
+
+app.put('/api/kanban/settings', (req, res) => {
+    const settings = req.body
+    if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'Invalid body' })
+    for (const [key, value] of Object.entries(settings)) {
+        kanbanDb.setSetting(key, String(value))
+    }
+    res.json({ ok: true })
+})
+
+// ── Update ticket status ────────────────────────────────────────────────────
+app.put('/api/glpi/ticket/:id/status', async (req, res) => {
+    const { id } = req.params
+    const { status, solution } = req.body
+    try {
+        const token = await glpiService.initSession()
+        const data = { status: parseInt(status) }
+        if (solution) data.solution = solution
+        const result = await glpiService.updateItem('Ticket', id, data)
+        await glpiService.killSession()
+        res.json(result || { ok: true })
+    } catch (err) {
+        console.error('Error updating ticket status', err)
+        res.status(500).json({ error: err.message || String(err) })
+    }
+})
+
+
+
+const ticketCostsDb = require('./db/ticketCosts')
+
+app.post('/api/ticket-costs', (req, res) => {
+    const { ticket_id, super_cost } = req.body
+    if (ticket_id === undefined || super_cost === undefined)
+        return res.status(400).json({ error: 'ticket_id et super_cost requis' })
+    ticketCostsDb.saveCost(ticket_id, super_cost)
+    res.json({ ok: true })
+})
+
+app.get('/api/ticket-costs', (req, res) => {
+    res.json(ticketCostsDb.getAllCosts())
+})

@@ -77,7 +77,7 @@ router.post('/', cpUpload, async (req, res) => {
   try {
     const targetImagesDir = path.join(__dirname, '../public/images');
     if (!fs.existsSync(targetImagesDir)) fs.mkdirSync(targetImagesDir, { recursive: true });
-    
+
     try {
       const zip = new AdmZip(zipPath);
       zip.extractAllTo(targetImagesDir, true);
@@ -85,7 +85,7 @@ router.post('/', cpUpload, async (req, res) => {
       console.error("[Import] Erreur extraction ZIP:", e.message);
     }
 
-    const assetsData = await parseCSVFile(csv1Path);   
+    const assetsData = await parseCSVFile(csv1Path);
     const ticketsData = await parseCSVFile(csv2Path);
     const ticketsCostsData = await parseCSVFile(csv3Path);
 
@@ -127,7 +127,7 @@ router.post('/', cpUpload, async (req, res) => {
         const manufacturerId = asset.Manufacturer ? await glpiService.getOrCreateManufacturer(asset.Manufacturer.trim()) : null;
         const locationId = asset.Location ? await glpiService.getOrCreateLocation(asset.Location.trim()) : null;
         const modelId = asset.Model ? await glpiService.getOrCreateModel(itemtype, asset.Model.trim()) : null;
-        
+
         // Déterminer le state ID selon le statut
         let stateId = 1; // Par défaut "En production"
         const statusLower = (asset.Status || '').trim().toLowerCase();
@@ -135,7 +135,7 @@ router.post('/', cpUpload, async (req, res) => {
         else if (statusLower === 'maintenance') stateId = 2;
         else if (statusLower === 'en stock') stateId = 3;
         else if (statusLower === 'en panne') stateId = 4;
-        
+
         // Préparer le payload pour GLPI avec les bons IDs
         const glpiPayload = {
           name: asset.Name,
@@ -143,7 +143,7 @@ router.post('/', cpUpload, async (req, res) => {
           comment: `Importé via NewApp`,
           states_id: stateId
         };
-        
+
         // Ajouter les champs relationnels avec les bons noms GLPI (suffix _id)
         if (manufacturerId) glpiPayload.manufacturers_id = manufacturerId;
         if (locationId) glpiPayload.locations_id = locationId;
@@ -154,7 +154,7 @@ router.post('/', cpUpload, async (req, res) => {
             glpiPayload[modelFieldName] = modelId;
           }
         }
-        
+
         // Ajouter l'utilisateur assigné si fourni
         // ⚠️ IMPORTANT: GLPI attend l'ID numérique, pas le nom d'utilisateur
         if (asset.User && asset.User.trim()) {
@@ -166,7 +166,7 @@ router.post('/', cpUpload, async (req, res) => {
             console.warn(`[GLPI] ⚠️ Utilisateur "${asset.User.trim()}" non trouvé - pas assigné`);
           }
         }
-        
+
         const result = await glpiService.createItem(itemtype, glpiPayload);
         if (result && result.id) {
           glpiId = result.id;
@@ -194,8 +194,8 @@ router.post('/', cpUpload, async (req, res) => {
       let matchedImagePath = allExtractedPaths.find(fullPath => {
         const fileNameOnly = path.basename(fullPath).toLowerCase();
         if (fileNameOnly.startsWith('.') || fileNameOnly.startsWith('._')) return false;
-        return fileNameOnly.startsWith(asset.Name.toLowerCase()) || 
-               (asset.Inventory_Number && fileNameOnly.includes(asset.Inventory_Number.toLowerCase()));
+        return fileNameOnly.startsWith(asset.Name.toLowerCase()) ||
+          (asset.Inventory_Number && fileNameOnly.includes(asset.Inventory_Number.toLowerCase()));
       }) || null;
 
       let finalImageName = matchedImagePath ? path.basename(matchedImagePath) : null;
@@ -207,14 +207,14 @@ router.post('/', cpUpload, async (req, res) => {
         try {
           const glpiUrlBase = process.env.GLPI_URL || "http://localhost/api.php/v1";
           const appToken = process.env.GLPI_APP_TOKEN || "uqZqwaXWY3GYWltQ7DidFLLQtWvHhjS92t99yMC4";
-          
+
           let fileBufferToSend;
           let sendName = originalName;
 
           // CONVERSION INTERNE : Si c'est un PNG, on force la conversion en JPEG
           if (fileExt === '.png') {
             console.log(`[Conversion] Outil Jimp : Transformation de ${originalName} en JPEG pour GLPI...`);
-            
+
             let image;
             const jimpInstance = require('jimp');
 
@@ -299,7 +299,7 @@ router.post('/', cpUpload, async (req, res) => {
       //     image: finalImageName
       //   })
       // );
-      
+
       console.log(`[Import] ✅ Asset "${asset.Name}" importé (Type: ${itemtype}, Localisation: ${asset.Location || 'N/A'}, Utilisateur: ${asset.User || 'N/A'})`);
     }
 
@@ -340,13 +340,13 @@ router.post('/', cpUpload, async (req, res) => {
     for (const ticket of ticketsData) {
       if (!ticket.Ref_Ticket) continue;
       let glpiTicketId = null;
-      
+
       try {
         const resultTicket = await glpiService.createItem("Ticket", {
           name: ticket.Titre || "Ticket sans titre",
           content: ticket.Description || "",
           type: ticket.Type || "Incident",
-          status: 1,
+          status: (ticket.Status.trim().toLowerCase() === 'closed') ? 5 : 1 || ( ticket.Status.trim().toLowerCase() === 'in progress') ? 2 : 1, // 5=Closed, 1=New
           priority: (ticket.Priority === 'High' || ticket.Priority === 'Haute') ? 5 : 3,
           urgency: (ticket.Priority === 'High' || ticket.Priority === 'Haute') ? 4 : 3,
           impact: 2
@@ -364,13 +364,13 @@ router.post('/', cpUpload, async (req, res) => {
       if (statusLower === 'in progress' || statusLower === 'en cours') statusId = 2;
       else if (statusLower === 'closed' || statusLower === 'clos') statusId = 5;
       else if (statusLower === 'on hold' || statusLower === 'en attente') statusId = 3;
-      
+
       // Déterminer la priorité
       let priorityId = 3; // Par défaut "Medium"
       const priorityLower = (ticket.Priority || '').trim().toLowerCase();
       if (priorityLower === 'high' || priorityLower === 'haute') priorityId = 5;
       else if (priorityLower === 'low' || priorityLower === 'basse') priorityId = 2;
-      
+
       // Date de création
       const dateCreation = (ticket.Date && ticket.Heure) ? `${ticket.Date} ${ticket.Heure}` : new Date().toISOString();
 
@@ -401,11 +401,11 @@ router.post('/', cpUpload, async (req, res) => {
       //   costData.time_cost,
       //   costData.fixed_cost
       // );
-      
+
       console.log(`[Import] ✅ Ticket #${ticket.Ref_Ticket} "${ticket.Titre}" importé (Durée: ${costData.duration_second}s, Coût: ${costData.time_cost}€)`);
     }
 
-    try { fs.unlinkSync(csv1Path); fs.unlinkSync(csv2Path); fs.unlinkSync(csv3Path); fs.unlinkSync(zipPath); } catch(e){}
+    try { fs.unlinkSync(csv1Path); fs.unlinkSync(csv2Path); fs.unlinkSync(csv3Path); fs.unlinkSync(zipPath); } catch (e) { }
 
     return res.json({ success: true, message: "Importation terminée avec adaptation d'image !" });
 

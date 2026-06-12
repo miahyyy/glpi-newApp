@@ -94,6 +94,12 @@ export async function resetItems(type, onProgress) {
     for (const item of list) {
         const id = item.id || item.ID
         if (!id) continue
+
+        // Condition spéciale pour User
+        if (type === "User" && id <= 7) {
+            continue
+        }
+
         try {
             await deleteItem(type, id)
         } catch (e) {
@@ -136,4 +142,53 @@ export async function uploadDocument(filename, blob, options = {}) {
         throw new Error(`Upload failed ${res.status}: ${text}`)
     }
     return res.json()
+}
+
+export async function updateTicketStatus(id, status, extra = {}) {
+    if (BACKEND) {
+        const res = await fetch(`${BACKEND}/api/glpi/ticket/${id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, ...extra })
+        })
+        if (!res.ok) throw new Error(`Update status error ${res.status}`)
+        return res.json()
+    }
+    // Fallback : appel direct GLPI REST
+    return request(`/Ticket/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ input: { id, status, ...extra } })
+    })
+}
+
+export async function fetchKanbanSettings() {
+    if (!BACKEND) return {}
+    try {
+        const res = await fetch(`${BACKEND}/api/kanban/settings`)
+        if (!res.ok) return {}
+        return res.json()
+    } catch { return {} }
+}
+
+export async function saveKanbanSettings(settings) {
+    if (!BACKEND) throw new Error('Backend non configuré (VITE_BACKEND_URL manquant)')
+    const res = await fetch(`${BACKEND}/api/kanban/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    })
+    if (!res.ok) throw new Error('Échec de la sauvegarde')
+    return res.json()
+}
+
+
+export async function saveTicketCost(ticketId, superCost) {
+  if (!BACKEND) throw new Error('Backend non configuré (VITE_BACKEND_URL manquant)')
+  const res = await fetch(`${BACKEND}/api/ticket-costs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket_id: ticketId, super_cost: superCost })
+  })
+  if (!res.ok) throw new Error(`Erreur sauvegarde coût : ${res.status}`)
+  return res.json()
 }
