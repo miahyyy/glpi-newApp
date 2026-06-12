@@ -27,8 +27,20 @@ async function request(path, opts = {}) {
 }
 
 export async function fetchTickets() {
+    // Prefer calling the backend which runs fetchAllGLPITickets server-side.
+    // Fallback to direct GLPI REST call if no backend is configured.
+    if (BACKEND) {
+        const url = `${BACKEND}/api/glpi/fetch-tickets`
+        const res = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
+        if (!res.ok) {
+            const text = await res.text()
+            throw new Error(`Backend fetchTickets error ${res.status}: ${text}`)
+        }
+        const json = await res.json()
+        return Array.isArray(json) ? json : json.data || json
+    }
+
     // GLPI REST for tickets: usually GET /Ticket
-    // We include a small default query to limit results
     return request('/Ticket', { method: 'GET' })
 }
 
@@ -102,7 +114,8 @@ export async function createItem(type, payload) {
 
 export async function createTicket(payload) {
     // POST /Ticket
-    return request('/Ticket', { method: 'POST', body: JSON.stringify(payload) })
+    const body = { input: Array.isArray(payload) ? payload : [payload] }
+    return request('/Ticket', { method: 'POST', body: JSON.stringify(body) })
 }
 
 export async function uploadDocument(filename, blob, options = {}) {

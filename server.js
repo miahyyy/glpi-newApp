@@ -32,6 +32,19 @@ app.post('/api/glpi/purge-tickets', async (req, res) => {
     }
 })
 
+// Fetch tickets via backend (wraps services/glpiService2.fetchAllGLPITickets)
+app.get('/api/glpi/fetch-tickets', async (req, res) => {
+    try {
+        const token = await glpiService.initSession()
+        const tickets = await glpiService.fetchAllGLPITickets(token)
+        await glpiService.killSession()
+        res.json(tickets || [])
+    } catch (err) {
+        console.error('Error in /api/glpi/fetch-tickets', err)
+        res.status(500).json({ error: err.message || String(err) })
+    }
+})
+
 // Serve static files from the React app (optional)
 app.use(express.static(path.join(__dirname, 'dist')))
 

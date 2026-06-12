@@ -166,6 +166,39 @@ async function deleteTicketFromGLPI(ticketGlpiId, sessionToken) {
   }
 }
 
+// Fonction pour récupérer TOUS les tickets sans limite
+async function fetchAllGLPITickets(sessionToken) {
+  try {
+    console.log("[GLPI] Récupération de tous les tickets...");
+
+    const response = await axios.get(`${GLPI_URL}/Ticket`, {
+      params: {
+        app_token: APP_TOKEN,
+        range: "0-999999" // Récupère jusqu'à 999999 tickets
+      },
+      headers: {
+        'Session-Token': sessionToken
+      }
+    });
+
+    let tickets = [];
+    if (Array.isArray(response.data)) {
+      tickets = response.data;
+    } else if (response.data && typeof response.data === 'object') {
+      tickets = response.data.data || Object.values(response.data);
+    }
+
+    const validTickets = tickets.filter(t => t && t.id);
+    console.log(`[GLPI] ${validTickets.length} tickets récupérés.`);
+
+    return validTickets;
+  } catch (error) {
+    const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+    console.error("[GLPI] Erreur lors de la récupération des tickets :", errorDetails);
+    return [];
+  }
+}
+
 // Fonction globale pour vider tous les tickets de GLPI
 async function purgeAllGLPITickets(sessionToken) {
   try {
@@ -509,6 +542,7 @@ module.exports = {
   deleteItem,
   searchItems,
   pushAssetToGLPI,
+  fetchAllGLPITickets,
   purgeAllGLPITickets,
   fetchAllGLPIAssets,
   getOrCreateManufacturer,

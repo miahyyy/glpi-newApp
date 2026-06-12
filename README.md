@@ -40,3 +40,8 @@ Next steps
 - Improve authentication flow (login, session management)
 - Add more components (Entity list, Assets, Ticket details)
 - Add routing with React Router if needed
+
+Documentation
+
+- Overview du projet: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
+- Guide développeur (prise en main): [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
